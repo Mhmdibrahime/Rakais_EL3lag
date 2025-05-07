@@ -1,0 +1,6 @@
+@Rakais_EL3lag_HostAddress = http://localhost:5298
+
+GET {{Rakais_EL3lag_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
