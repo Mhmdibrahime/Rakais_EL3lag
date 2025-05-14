@@ -8,9 +8,10 @@ namespace Rakais_EL3lag.Models
         public int Id { get; set; }
         [MaxLength(500)]
         public string Name { get; set; } = null!;
-
+        
         public ICollection<Image> Images { get; set; } = new List<Image>();
-       
+        public ICollection<Question> Questions { get; set; } = new List<Question>();
+
     }
 
 

@@ -14,6 +14,7 @@ namespace Rakais_EL3lag.Models
 
         public DbSet<Section> Sections => Set<Section>();
         public DbSet<Image> Images => Set<Image>();
+        public DbSet<Question> Questions => Set<Question>();
 
     }
 }

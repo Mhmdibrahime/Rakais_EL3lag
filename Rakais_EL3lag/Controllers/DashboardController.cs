@@ -49,7 +49,7 @@ namespace Rakais_EL3lag.Controllers
             var images = section.Images.Select(img => new ImagesDto
             {
                 Id = img.Id,
-                Name = img.Name,
+                
                 Url = img.ImageUrl,
                 IsActive = img.Active
             });
@@ -102,7 +102,7 @@ namespace Rakais_EL3lag.Controllers
             var image = new Image
             {
                 SectionId = section.Id,
-                Name = imageDto.Name,
+                
                 FileName = uniqueFileName,
                 Active = imageDto.Active
             };
@@ -115,18 +115,54 @@ namespace Rakais_EL3lag.Controllers
 
         // PUT: api/Dashboard/images/{id}
         [HttpPut("update-image/{id}")]
-        public async Task<IActionResult> UpdateImage(int id, [FromBody] ImageUpdateDto imageDto)
+        [RequestSizeLimit(_maxFileSize)]
+        public async Task<IActionResult> UpdateImage(int id, [FromForm] ImageUpdateDto imageDto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            var image = await _context.Images.FindAsync(id);
+            var image = await _context.Images.Include(i => i.Section).FirstOrDefaultAsync(i => i.Id == id);
             if (image == null) return NotFound();
 
-            image.Name = imageDto.Name;
+           
+      
+
+            // ✅ Replace Image File if new file uploaded
+            if (imageDto.ImageFile != null && imageDto.ImageFile.Length > 0)
+            {
+                var fileExtension = Path.GetExtension(imageDto.ImageFile.FileName).ToLower();
+                if (!_allowedExtensions.Contains(fileExtension))
+                    return BadRequest($"Invalid file type. Allowed types: {string.Join(", ", _allowedExtensions)}");
+
+                if (imageDto.ImageFile.Length > _maxFileSize)
+                    return BadRequest($"File size exceeds {_maxFileSize / (1024 * 1024)}MB limit");
+
+                var imagesFolder = Path.Combine(_environment.WebRootPath, "images");
+
+                // Delete old file
+                var oldFilePath = Path.Combine(imagesFolder, image.FileName);
+                if (System.IO.File.Exists(oldFilePath))
+                {
+                    System.IO.File.Delete(oldFilePath);
+                }
+
+                // Save new file
+                var uniqueFileName = $"{Guid.NewGuid()}{fileExtension}";
+                var newFilePath = Path.Combine(imagesFolder, uniqueFileName);
+
+                using (var stream = new FileStream(newFilePath, FileMode.Create))
+                {
+                    await imageDto.ImageFile.CopyToAsync(stream);
+                }
+
+                // Update database file name
+                image.FileName = uniqueFileName;
+            }
+
             await _context.SaveChangesAsync();
 
-            return NoContent();
+            return Ok(new { id = image.Id, message = "Image updated successfully." });
         }
+
 
         // PATCH: api/Dashboard/images/{id}/activate
         [HttpPatch("images/{id}/activate")]
@@ -169,6 +205,99 @@ namespace Rakais_EL3lag.Controllers
             _context.Images.Remove(image);
             await _context.SaveChangesAsync();
             return NoContent();
+        }
+
+        #endregion
+
+        #region Question Endpoints
+
+        [HttpGet("Question/by-section/{sectionName}")]
+        public async Task<IActionResult> GetQuestionBySectionName(string sectionName)
+        {
+            var section = await _context.Sections
+                .Include(s => s.Questions)
+                .FirstOrDefaultAsync(s => s.Name == sectionName);
+
+            if (section == null) return NotFound("Section not found");
+
+            var Questions = section.Questions.Select(que => new QuestionDto
+            {
+                Id = que.Id,
+                IsActive = que.Active
+            });
+
+            return Ok(Questions);
+        }
+
+        [HttpPatch("Question/{id}/activate")]
+        public async Task<IActionResult> ActivateQuestion(int id)
+        {
+            var Ques = await _context.Questions.FindAsync(id);
+            if (Ques == null) return NotFound();
+
+            Ques.Active = true;
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // PATCH: api/Dashboard/images/{id}/deactivate
+        [HttpPatch("Question/{id}/deactivate")]
+        public async Task<IActionResult> DeactivateQuestion(int id)
+        {
+            var Ques = await _context.Questions.FindAsync(id);
+            if (Ques == null) return NotFound();
+
+            Ques.Active = false;
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // DELETE: api/Dashboard/images/{id}
+        [HttpDelete("delete-Question/{id}")]
+        public async Task<IActionResult> DeleteQuestion(int id)
+        {
+            var Ques = await _context.Questions.FindAsync(id);
+            if (Ques == null) return NotFound();
+
+            _context.Questions.Remove(Ques);
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+        [HttpPut("update-Question/{id}")]
+        public async Task<IActionResult> UpdateQuestion(int id, [FromBody] UpdateQuestionDto QuestionDto)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            var Ques = await _context.Questions.FindAsync(id);
+            if (Ques == null) return NotFound();
+
+            Ques.AnswerText = QuestionDto.AnswerText;
+            Ques.QuestionText = QuestionDto.QuestionText;
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
+        [HttpPost("upload-question")]
+        public async Task<IActionResult> AddQuestion([FromBody] AddQuestionDto dto)
+        {
+            var section = await _context.Sections.FirstOrDefaultAsync(s => s.Name == dto.SectionName);
+            if (section == null)
+            {
+                section = new Section { Name = dto.SectionName };
+                _context.Sections.Add(section);
+                await _context.SaveChangesAsync();
+            }
+            var question = new Question
+            {
+                QuestionText = dto.QuestionText,
+                AnswerText = dto.AnswerText
+            };
+
+            _context.Questions.Add(question);
+            await _context.SaveChangesAsync();
+
+            return Ok(question);
+
         }
 
         #endregion

@@ -6,7 +6,7 @@ namespace Rakais_EL3lag.Models.Dto
     {
         [Required]
         public string SectionName { get; set; } = null!;
-        public string Name { get; set; } = null!;
+       
 
         [Required]
         public IFormFile ImageFile { get; set; } = null!;

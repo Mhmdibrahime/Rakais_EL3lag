@@ -2,7 +2,7 @@
 {
     public class ImageUpdateDto
     {
-        public string Name { get; set; } = null!;
+        public IFormFile? ImageFile { get; set; }
 
     }
 

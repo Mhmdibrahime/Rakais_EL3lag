@@ -9,10 +9,9 @@ namespace Rakais_EL3lag.Models
         public int SectionId { get; set; }
 
         [MaxLength(500)]
-        public string Name { get; set; }
-        [MaxLength(500)]
         public string FileName { get; set; } = null!; 
         public bool Active { get; set; } = true;
+        
 
         public Section? Section { get; set; } = null!;
 
