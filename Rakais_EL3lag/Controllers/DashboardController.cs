@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Rakais_EL3lag.Models;
@@ -9,6 +10,7 @@ namespace Rakais_EL3lag.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    
     public class DashboardController : ControllerBase
     {
         private readonly RakaizContext _context;
@@ -38,6 +40,7 @@ namespace Rakais_EL3lag.Controllers
 
         // GET: api/Dashboard/images/by-section/{sectionName}
         [HttpGet("images/by-section/{sectionName}")]
+       
         public async Task<IActionResult> GetImagesBySectionName(string sectionName)
         {
             var section = await _context.Sections

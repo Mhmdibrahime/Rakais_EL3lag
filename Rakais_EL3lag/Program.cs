@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Rakais_EL3lag.Models;
 using Rakais_EL3lag.Seed;
 using System.Text;
@@ -37,16 +38,25 @@ namespace Rakais_EL3lag
                 options.TokenValidationParameters = new TokenValidationParameters()
                 {
                     ValidateIssuer = true,
-                    ValidIssuer = builder.Configuration["JWT:IssuerIP"],
+                    //ValidIssuer = builder.Configuration["JWT:IssuerIP"],
 
                     IssuerSigningKey =
                         new SymmetricSecurityKey(
-                            Encoding.UTF8.GetBytes(builder.Configuration["JWT:SecritKey"]))
+                            Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:SecretKey"])),
+
+                        
+                    
+                    ValidateLifetime = true,
+                    ValidIssuer = builder.Configuration["JwtSettings:Issuer"]
+                    
+            
 
                 };
+
             });
             builder.Services.AddIdentity<IdentityUser,IdentityRole>().AddEntityFrameworkStores<RakaizContext>().AddDefaultTokenProviders();
             // Add services to the container.
+            builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
 
             builder.Services.AddControllers();
             var wwwrootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
@@ -57,19 +67,62 @@ namespace Rakais_EL3lag
 
             builder.Services.AddSingleton<IFileProvider>(new PhysicalFileProvider(wwwrootPath));
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowAll", policy =>
+                {
+                    policy.AllowAnyOrigin()
+                          .AllowAnyHeader()
+                          .AllowAnyMethod();
+                });
+            });
             builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
+            builder.Services.AddSwaggerGen(
+                c =>
+                {
+                    // Other Swagger config...
+
+                    // Add JWT Authentication support in Swagger UI
+                    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                    {
+                        Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
+                        Name = "Authorization",
+                        In = ParameterLocation.Header,
+                        Type = SecuritySchemeType.ApiKey,
+                        Scheme = "Bearer"
+                    });
+
+                    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+                }
+                );
             
             var app = builder.Build();
 
+            app.UseCors("AllowAll");
+
             // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment())
-            {
+          
                 app.UseSwagger();
                 app.UseSwaggerUI();
-            }
+            
 
             app.UseStaticFiles();
+
+            app.UseHttpsRedirection();
+            app.UseAuthentication();
             app.UseAuthorization();
 
 

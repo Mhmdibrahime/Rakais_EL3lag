@@ -1,8 +1,9 @@
-﻿
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Rakais_EL3lag.Models;
 using Rakais_EL3lag.Models.Dto;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -14,54 +15,60 @@ namespace Rakais_EL3lag.Controllers
     [ApiController]
     public class AccountController : ControllerBase
     {
-        private readonly UserManager<IdentityUser> user;
+        private readonly UserManager<IdentityUser> _userManager;
+        private readonly JwtSettings _jwtSettings;
 
-        public AccountController(UserManager<IdentityUser> user)
+        public AccountController(UserManager<IdentityUser> userManager, IOptions<JwtSettings> jwtOptions)
         {
-            this.user = user;
+            _userManager = userManager;
+            _jwtSettings = jwtOptions.Value;
         }
-        [HttpPost("Login")]
-        public async Task<IActionResult> Login(LoginDto UserLogin)
-        {
-            if (ModelState.IsValid)
-            {
-                var applicationUser = await user.FindByNameAsync(UserLogin.Username);
-                if (applicationUser != null)
-                {
-                    bool Isfound = await user.CheckPasswordAsync(applicationUser, UserLogin.Password);
-                    if (Isfound == true)
-                    {
-                        List<Claim> UserClaims = new List<Claim>();
-                        UserClaims.Add(new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()));
-                        UserClaims.Add(new Claim(ClaimTypes.NameIdentifier, applicationUser.Id));
-                        UserClaims.Add(new Claim(ClaimTypes.Name, applicationUser.UserName ));
-                        var Roles = await user.GetRolesAsync(applicationUser);
-                        foreach (var item in Roles)
-                        {
-                            UserClaims.Add(new Claim(ClaimTypes.Role, item));
-                        }
-                        SymmetricSecurityKey key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("mohamedfouad@mohamed12345Ibra$2463187"));
 
-                        SigningCredentials signing = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-                        var expiration = UserLogin.RememberMe ? DateTime.Now.AddDays(7) : DateTime.Now.AddHours(1);
-                        JwtSecurityToken Token = new JwtSecurityToken(
-                            issuer: "http://localhost:5298/",
-                            expires: expiration,
-                            claims: UserClaims,
-                            signingCredentials: signing
-                               );
-                        return Ok(
-                            new
-                            {
-                                token = new JwtSecurityTokenHandler().WriteToken(Token),
-                                expiration = expiration
-                            }
-                            );
-                    }
-                    ModelState.AddModelError("UserName", "UserName or Password In Valid");
-                }
+        [HttpPost("Login")]
+        public async Task<IActionResult> Login([FromBody] LoginDto userLogin)
+        {
+            if (userLogin == null || string.IsNullOrWhiteSpace(userLogin.Username) || string.IsNullOrWhiteSpace(userLogin.Password))
+            {
+                return BadRequest("Invalid login request.");
             }
-            return BadRequest(ModelState);
+
+            var user = await _userManager.FindByNameAsync(userLogin.Username);
+            if (user == null || !await _userManager.CheckPasswordAsync(user, userLogin.Password))
+            {
+                return Unauthorized(new { message = "Invalid username or password." });
+            }
+
+            var userClaims = new List<Claim>
+            {
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                new Claim(ClaimTypes.Name, user.UserName)
+            };
+
+            var roles = await _userManager.GetRolesAsync(user);
+            foreach (var role in roles)
+            {
+                userClaims.Add(new Claim(ClaimTypes.Role, role));
+            }
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.SecretKey));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var expiration = userLogin.RememberMe ? DateTime.UtcNow.AddDays(7) : DateTime.UtcNow.AddHours(1);
+
+            var token = new JwtSecurityToken(
+                issuer: _jwtSettings.Issuer,
+                audience: _jwtSettings.Issuer,
+                claims: userClaims,
+                expires: expiration,
+                signingCredentials: creds
+            );
+
+            return Ok(new
+            {
+                token = new JwtSecurityTokenHandler().WriteToken(token),
+                expiration
+            });
         }
     }
 }
